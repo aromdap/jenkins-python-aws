@@ -1,0 +1,19 @@
+pipeline {
+    agent any
+    stages {
+        stage('Remote trigger: Staging') {
+            steps {
+                script{
+                    build job: 'PIPELINE-FULL-STAGING', propagate: true, wait: true
+                }
+            }
+        }
+        stage('Remote trigger: Production') {
+            steps {
+                script{
+                    build job: 'PIPELINE-FULL-PRODUCTION', propagate: true, wait: true
+                }
+            }
+        }
+    }
+}

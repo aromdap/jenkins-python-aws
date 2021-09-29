@@ -1,0 +1,15 @@
+version: "3.6"
+services: 
+  dynamodb:
+    image: amazon/dynamodb-local
+    environment:
+      - AWS_ACCESS_KEY_ID=key
+      - AWS_SECRET_ACCESS_KEY=secret
+      - AWS_REGION=us-east-1
+    ports: 
+      - 8000:8000
+    container_name: dynamodb
+networks: 
+  default:
+    external:
+      name: local-todo-list

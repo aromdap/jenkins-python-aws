@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  todo-list-aws
+  DevOps SAM Serverless application
+
+Parameters:
+  DynamoDbTable:
+    Type: String
+  Stage:
+    Type: String
+
+Globals:
+  Function:
+    Runtime: python3.8
+    CodeUri: src/
+    Timeout: 5
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        DYNAMODB_TABLE: !Ref DynamoDbTable
+
+Resources:
+  TodoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoDbTable 
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+  ToDoFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      Handler: lambda_handler.handler
+      Policies:
+      - Statement:
+          Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - comprehend:DetectDominantLanguage
+            - translate:TranslateText
+          Resource: "*"
+      
+      Events:
+        create:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /create
+            Method: post
+        delete:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /delete/{id}
+            Method: get
+        get:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /get/{id}
+            Method: get
+        show:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /show
+            Method: get
+        translate:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /translate/{id}/{lang}
+            Method: get 
+        update:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /update/{id}
+            Method: put 
+
+
+
+
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  ToDoApi:
+    Description: "API Gateway endpoint URL for Prod stage for ToDo function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  ToDoFunction:
+    Description: "ToDo Lambda Function ARN"
+    Value: !GetAtt ToDoFunction.Arn
+  ToDoFunctionIamRole:
+    Description: "Implicit IAM Role created for ToDo function"
+    Value: !GetAtt ToDoFunctionRole.Arn

@@ -1,0 +1,33 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "todolist"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-yk8eix4xbbcc"
+s3_prefix = "todolist"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DynamoDbTable=\"TodoListTable\", Stage=\"default\"" 
+
+[staging]
+[staging.deploy]
+[staging.deploy.parameters]
+stack_name = "todolist-staging"
+s3_bucket = "es-unir-staging-s3-55790-artifacts"
+s3_prefix = "todolist-staging"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DynamoDbTable=\"TodoListTableStaging\", Stage=\"staging\"" 
+
+[production]
+[production.deploy]
+[production.deploy.parameters]
+stack_name = "todolist-production"
+s3_bucket = "es-unir-production-s3-55790-artifacts"
+s3_prefix = "todolist-production"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DynamoDbTable=\"TodoListTableProduction\", Stage=\"production\"" 

@@ -1,0 +1,115 @@
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                deleteDir()
+                echo '// Checkout // Get some code from a CodeCommit repository'
+                git branch: 'dev', credentialsId: '676655fc-c40f-4964-b3ba-c3dfb91b2094', url: 'https://git-codecommit.us-east-1.amazonaws.com/v1/repos/todo-list-aws'
+            }
+        }
+        stage('SetUp'){
+            steps{
+                echo '// SetUp // Creating Python Virtual Environment'
+                sh '''
+                    python3 -m venv env
+                    source env/bin/activate 
+                    pip install -r requirements.txt -q
+
+                    python3 -m venv unitenv
+                    source unitenv/bin/activate
+                    pip install -r ./test/requirements.txt -q
+                '''
+            }
+        }
+        stage('Static & Unit Tests'){
+            steps{
+                echo '// Testing // Static analysis of code'
+                sh '''
+                    source env/bin/activate
+                    
+                    rm ./radon/*
+                    radon cc src/ --min B --total-average -s --json --output-file ./radon/analysis.json
+                    grep -il 'rank' ./radon/* && 'Radon test: failed'
+
+                    rm ./flake8/*
+                    flake8 src/ --exit-zero --ignore W --statistics --show-source --format=pylint --output-file ./flake8/analysis.json
+                    grep -il -E '[[:alnum:]]' ./flake8/* && 'Flake8 test: failed'
+                    
+                    rm ./bandit/*
+                    bandit src/* --exit-zero --format txt --output ./bandit/analysis.txt
+                    grep -il 'No issues identified' ./bandit/* || 'Bandit test: failed!'
+                '''
+                echo '// Testing // Unittest of app'
+                sh '''
+                    source unitenv/bin/activate
+                    cd test
+                    coverage run -m TestToDoClass
+                    coverage html --fail-under=80 todolist.py                     
+                '''
+            }
+        }
+        stage('Build'){
+            steps{
+                sh 'sam build -u'
+            }
+        }
+        stage('Deploy'){
+            steps{
+                sh 'sam deploy --config-env staging'
+            }
+        }
+        stage('Integration Tests'){
+            steps{
+                sh '''
+                    id_response=$(curl -X POST https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/create --data '{"text":"This is a test"}' | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+                    [ -z "$id_response" ] && 'Create method: Failed!' || id_path=$id_response
+
+                    id_response=''
+                    id_response=$(curl https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/get/$id_path | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+                    [ -z "$id_response" ] && 'Get method: Failed!' || id_path=$id_response 
+
+                    code=$(curl -o /dev/null -w "%{http_code}" https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/show)
+                    [ $code != 200 ] && 'Show method: Failed'
+
+                    id_response=''
+                    id_response=$(curl -X PUT https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/update/$id_path --data '{"text":"Changing text","checked":true}' | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+                    [ -z "$id_response" ] && 'Update method: Failed!' || id_path=$id_response 
+                    text=$(curl  https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/translate/$id_path/es | python3 -c "import sys, json; print(json.load(sys.stdin)['text'])")
+                    [ "$text" != "Cambio de texto" ] && 'Translate method: Failed'
+
+                    curl https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/delete/$id_path
+                    code=''
+                    code=$(curl -o /dev/null -w "%{http_code}" https://or92aavjea.execute-api.us-east-1.amazonaws.com/Prod/get/$id_path)
+                    [ "$code" == 502 ] || 'Delete method: Failed!'
+
+                '''
+            }
+        }
+        stage('Merge'){
+            steps{
+                sh '''
+                    git add .
+                    git commit -m 'Jenkins pipeline: staging passed!'
+                    git push -u origin dev
+                    git checkout main
+                    git merge dev
+                    git push -u origin main
+
+                '''
+            }
+        }
+
+    }    
+    post {
+        // Clean after build
+        always {
+            cleanWs(cleanWhenNotBuilt: false,
+                    deleteDirs: true,
+                    disableDeferredWipeout: true,
+                    notFailBuild: true,
+                    patterns: [[pattern: '.gitignore', type: 'INCLUDE'],
+                               [pattern: '.propsfile', type: 'EXCLUDE']])
+        }
+    }   
+}
